@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harsh Tone Lab</title>
+<style>
+    :root {
+        --cyan: #35f0ff;
+        --magenta: #ff3df0;
+        --bg-panel: rgba(8, 6, 16, 0.74);
+        --line: rgba(120, 200, 255, 0.18);
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; overflow: hidden; background: black;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        color: #dfeaff;
+    }
+    canvas#scene { display: block; }
+    .grain {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: radial-gradient(rgba(0,0,0,0.1), rgba(255,255,255,0.05));
+        mix-blend-mode: overlay; opacity: 0.4; pointer-events: none;
+        animation: grainEffect 0.2s infinite; z-index: 2;
+    }
+    @keyframes grainEffect { 0% { transform: translate(0,0); } 100% { transform: translate(-1px,1px); } }
+
+    #panel {
+        position: fixed; top: 16px; left: 16px; z-index: 10;
+        width: 300px; max-height: calc(100vh - 32px);
+        background: var(--bg-panel);
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        border: 1px solid var(--line); border-radius: 12px;
+        box-shadow: 0 0 40px rgba(53, 240, 255, 0.08);
+        overflow: hidden; display: flex; flex-direction: column;
+    }
+    .hdr {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px; border-bottom: 1px solid var(--line);
+        letter-spacing: 3px; font-size: 12px; font-weight: 700;
+        text-transform: uppercase;
+        background: linear-gradient(90deg, rgba(53,240,255,0.10), rgba(255,61,240,0.10));
+        color: #eaf6ff; flex: 0 0 auto;
+    }
+    .hdr .dot {
+        width: 8px; height: 8px; border-radius: 50%; background: #444;
+        margin-right: 8px; display: inline-block; vertical-align: middle;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .hdr.live .dot { background: var(--magenta); box-shadow: 0 0 10px var(--magenta); }
+    .hdr .title-wrap { display: flex; align-items: center; }
+    .mini {
+        font-family: inherit; font-size: 10px; letter-spacing: 1px;
+        text-transform: uppercase; cursor: pointer; background: transparent;
+        color: #9fb6d6; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+    }
+    .mini:hover { color: #fff; border-color: var(--cyan); }
+
+    .body { padding: 12px 14px 16px; overflow-y: auto; }
+    .body::-webkit-scrollbar { width: 8px; }
+    .body::-webkit-scrollbar-thumb { background: rgba(120,200,255,0.25); border-radius: 4px; }
+
+    .btns { display: flex; gap: 8px; margin-bottom: 12px; }
+    .btns button {
+        flex: 1; font-family: inherit; font-size: 12px; font-weight: 700;
+        letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+        padding: 11px 0; border-radius: 8px; border: 1px solid transparent;
+        transition: transform 0.05s, box-shadow 0.15s;
+    }
+    .btns button:active { transform: translateY(1px); }
+    .play { background: rgba(53,240,255,0.14); color: var(--cyan); border-color: rgba(53,240,255,0.5); }
+    .play:hover { box-shadow: 0 0 18px rgba(53,240,255,0.35); }
+    .stop { background: rgba(255,61,240,0.10); color: var(--magenta); border-color: rgba(255,61,240,0.4); }
+    .stop:hover { box-shadow: 0 0 18px rgba(255,61,240,0.30); }
+
+    .sec {
+        margin: 16px 0 9px; padding-bottom: 4px;
+        font-size: 10px; font-weight: 700; letter-spacing: 2.5px;
+        text-transform: uppercase; color: var(--magenta);
+        border-bottom: 1px solid var(--line);
+    }
+    .sec:first-child { margin-top: 2px; }
+
+    label.ctrl {
+        display: block; margin: 0 0 11px;
+        font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: #9fb6d6;
+    }
+    label.ctrl .val { float: right; color: var(--cyan); font-weight: 700; letter-spacing: 0.5px; }
+    select {
+        width: 100%; margin-top: 6px; font-family: inherit; font-size: 12px;
+        color: #eaf6ff; background: rgba(255,255,255,0.04);
+        border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
+        text-transform: none; letter-spacing: 0.5px;
+    }
+    select option { background: #0d0a1a; color: #eaf6ff; }
+    select:focus, input:focus { outline: none; border-color: var(--cyan); }
+
+    input[type="range"] {
+        -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+        margin-top: 8px; background: rgba(255,255,255,0.10); border-radius: 3px; outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none; width: 15px; height: 15px;
+        border-radius: 50%; background: var(--cyan); cursor: pointer;
+        box-shadow: 0 0 8px rgba(53,240,255,0.6); border: 2px solid #06121a;
+    }
+    input[type="range"]::-moz-range-thumb {
+        width: 15px; height: 15px; border-radius: 50%; background: var(--cyan);
+        cursor: pointer; border: 2px solid #06121a; box-shadow: 0 0 8px rgba(53,240,255,0.6);
+    }
+
+    .export {
+        margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line);
+        display: flex; gap: 8px; align-items: flex-end;
+    }
+    .exp-sec { flex: 1; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #9fb6d6; }
+    .exp-sec input {
+        width: 100%; margin-top: 6px; font-family: inherit; font-size: 12px;
+        color: #eaf6ff; background: rgba(255,255,255,0.04);
+        border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
+    }
+    .export-btn {
+        font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+        text-transform: uppercase; cursor: pointer; white-space: nowrap; padding: 9px 12px;
+        border-radius: 6px; background: rgba(255,61,240,0.12); color: var(--magenta);
+        border: 1px solid rgba(255,61,240,0.45);
+    }
+    .export-btn:hover { box-shadow: 0 0 14px rgba(255,61,240,0.3); }
+    .export-btn:disabled { opacity: 0.5; cursor: wait; }
+    .collapsed .body { display: none; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="grain"></div>
+
+<div id="panel">
+    <div class="hdr" id="hdr">
+        <span class="title-wrap"><span class="dot"></span>Harsh Tone Lab</span>
+        <button class="mini" id="hideBtn">hide</button>
+    </div>
+    <div class="body" id="panelBody">
+        <div class="btns">
+            <button class="play" id="playBtn">play</button>
+            <button class="stop" id="stopBtn">stop</button>
+        </div>
+        <div id="controls"></div>
+        <div class="export">
+            <label class="exp-sec">seconds
+                <input type="number" id="seconds" min="0.1" max="300" step="0.1" value="5">
+            </label>
+            <button class="export-btn" id="exportBtn">export .wav</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+//  CONTROL SPEC  (single source of truth for params + UI)
+// ============================================================
+const SPEC = [
+    { t:'sec', label:'Source' },
+    { id:'waveform', t:'select', label:'waveform', def:'sawtooth',
+      opts:[['sawtooth','sawtooth (harshest)'],['square','square (buzzy)'],['triangle','triangle (softer)'],['sine','sine (pure)']] },
+    { id:'freq',         label:'frequency',       min:20,  max:12000, step:1,   def:3000, unit:'Hz', dec:0 },
+    { id:'beat',         label:'beat / roughness', min:0,  max:120,  step:1,    def:30,   unit:'Hz', dec:0 },
+    { id:'subLevel',     label:'sub level',       min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'noiseLevel',   label:'noise level',     min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'vibratoRate',  label:'vibrato rate',    min:0.1, max:12,   step:0.1,  def:5,    unit:'Hz', dec:1 },
+    { id:'vibratoDepth', label:'vibrato depth',   min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+
+    { t:'sec', label:'Shape' },
+    { id:'drive',        label:'drive',           min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'harshness',    label:'harshness',       min:0,   max:100,  step:1,    def:45,   unit:'%',  dec:0 },
+    { id:'bitcrush',     label:'bitcrush',        min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'ringFreq',     label:'ring mod freq',   min:0,   max:2000, step:1,    def:200,  unit:'Hz', dec:0 },
+    { id:'ringAmount',   label:'ring mod amount', min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+
+    { t:'sec', label:'Filter' },
+    { id:'cutoff',       label:'cutoff',          min:100, max:14000,step:1,    def:14000,unit:'Hz', dec:0 },
+    { id:'resonance',    label:'resonance',       min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'wobbleRate',   label:'wobble rate',     min:0.1, max:16,   step:0.1,  def:4,    unit:'Hz', dec:1 },
+    { id:'wobbleDepth',  label:'wobble depth',    min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+
+    { t:'sec', label:'Modulation' },
+    { id:'amRate',       label:'AM rate',         min:0.1, max:30,   step:0.1,  def:6,    unit:'Hz', dec:1 },
+    { id:'amDepth',      label:'AM depth',        min:0,   max:100,  step:1,    def:80,   unit:'%',  dec:0 },
+
+    { t:'sec', label:'Space / Stereo' },
+    { id:'stereoSep',    label:'stereo separation',min:0,  max:100,  step:1,    def:40,   unit:'%',  dec:0 },
+    { id:'autopanRate',  label:'auto-pan rate',   min:0.05,max:10,   step:0.05, def:1,    unit:'Hz', dec:2 },
+    { id:'autopanDepth', label:'auto-pan depth',  min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'echoTime',     label:'echo time',       min:20,  max:600,  step:5,    def:180,  unit:'ms', dec:0 },
+    { id:'echoFeedback', label:'echo feedback',   min:0,   max:100,  step:1,    def:35,   unit:'%',  dec:0 },
+    { id:'echoMix',      label:'echo mix',        min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+    { id:'reverbMix',    label:'reverb mix',      min:0,   max:100,  step:1,    def:0,    unit:'%',  dec:0 },
+
+    { t:'sec', label:'Master' },
+    { id:'volume',       label:'master volume',   min:0,   max:100,  step:1,    def:28,   unit:'%',  dec:0 }
+];
+
+const params = {};
+SPEC.forEach(c => { if (c.id) params[c.id] = c.def; });
+
+// ============================================================
+//  WAVESHAPER CURVES
+// ============================================================
+function makeCurve(amount) { // harshness distortion, normalized to peak ~1
+    if (amount <= 0) { const lin = new Float32Array(2); lin[0] = -1; lin[1] = 1; return lin; }
+    const k = amount * 120, n = 2048, curve = new Float32Array(n), deg = Math.PI / 180;
+    let peak = 0;
+    for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        const y = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        curve[i] = y; if (Math.abs(y) > peak) peak = Math.abs(y);
+    }
+    if (peak > 0) for (let i = 0; i < n; i++) curve[i] /= peak;
+    return curve;
+}
+function makeCrushCurve(bits) { // amplitude quantization (bit depth reduction)
+    const n = 4096, curve = new Float32Array(n);
+    const levels = Math.pow(2, bits), step = 2 / levels;
+    for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        let y = Math.round(x / step) * step;
+        if (y > 1) y = 1; if (y < -1) y = -1;
+        curve[i] = y;
+    }
+    return curve;
+}
+
+// ============================================================
+//  AUDIO ENGINE
+// ============================================================
+let audioCtx = null, analyser = null, analyserL = null, analyserR = null, splitter = null;
+let freqData = null, timeData = null, timeL = null, timeR = null;
+let live = null, playing = false;
+
+function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.7;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    timeData = new Uint8Array(analyser.fftSize);
+    analyser.connect(audioCtx.destination);
+
+    splitter = audioCtx.createChannelSplitter(2);
+    analyserL = audioCtx.createAnalyser(); analyserL.fftSize = 256;
+    analyserR = audioCtx.createAnalyser(); analyserR.fftSize = 256;
+    splitter.connect(analyserL, 0);
+    splitter.connect(analyserR, 1);
+    timeL = new Uint8Array(analyserL.fftSize);
+    timeR = new Uint8Array(analyserR.fftSize);
+}
+
+function makeNoiseBuffer(ctx) {
+    const len = Math.floor(ctx.sampleRate * 2), b = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+}
+function makeImpulse(ctx) {
+    const len = Math.floor(ctx.sampleRate * 1.6), b = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+        const d = b.getChannelData(c);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    }
+    return b;
+}
+
+function setP(param, val, ctx, smooth) {
+    if (smooth) { try { param.setTargetAtTime(val, ctx.currentTime, 0.02); } catch (e) { param.value = val; } }
+    else param.value = val;
+}
+
+// apply every param from `params` onto a built graph's nodes
+function setParams(n, ctx, s) {
+    const P = params;
+    n.osc1.type = P.waveform; n.osc2.type = P.waveform;
+    setP(n.osc1.frequency, P.freq, ctx, s);
+    setP(n.osc2.frequency, P.freq + P.beat, ctx, s);
+    setP(n.subOsc.frequency, P.freq / 2, ctx, s);
+    setP(n.subGain.gain, (P.subLevel / 100) * 0.7, ctx, s);
+    setP(n.noiseGain.gain, (P.noiseLevel / 100) * 0.4, ctx, s);
+    setP(n.pan1.pan, -(P.stereoSep / 100), ctx, s);
+    setP(n.pan2.pan, (P.stereoSep / 100), ctx, s);
+    setP(n.driveGain.gain, 1 + (P.drive / 100) * 7, ctx, s);
+    n.harsh.curve = makeCurve(P.harshness / 100);
+    n.crush.curve = makeCrushCurve(16 - (P.bitcrush / 100) * 14.5);
+    setP(n.ringOsc.frequency, P.ringFreq, ctx, s);
+    const rk = P.ringAmount / 100;
+    setP(n.ringDepth.gain, rk, ctx, s);
+    setP(n.ringDry.gain, 1 - rk, ctx, s);
+    setP(n.filter.frequency, P.cutoff, ctx, s);
+    setP(n.filter.Q, (P.resonance / 100) * 28, ctx, s);
+    setP(n.wobbleLFO.frequency, P.wobbleRate, ctx, s);
+    setP(n.wobbleDepth.gain, (P.wobbleDepth / 100) * 4000, ctx, s);
+    setP(n.amLFO.frequency, P.amRate, ctx, s);
+    const d = P.amDepth / 100;
+    setP(n.amGain.gain, 1 - d * 0.5, ctx, s);
+    setP(n.amDepth.gain, d * 0.5, ctx, s);
+    setP(n.vibLFO.frequency, P.vibratoRate, ctx, s);
+    setP(n.vibDepth.gain, (P.vibratoDepth / 100) * 200, ctx, s);
+    setP(n.autopanLFO.frequency, P.autopanRate, ctx, s);
+    setP(n.autopanDepth.gain, P.autopanDepth / 100, ctx, s);
+    setP(n.delay.delayTime, P.echoTime / 1000, ctx, s);
+    setP(n.delayFB.gain, (P.echoFeedback / 100) * 0.85, ctx, s);
+    setP(n.delayWet.gain, P.echoMix / 100, ctx, s);
+    setP(n.reverbWet.gain, P.reverbMix / 100, ctx, s);
+    setP(n.vol.gain, (P.volume / 100) * 0.9, ctx, s);
+}
+
+// build the entire node graph. Used identically by live playback and offline export.
+function buildGraph(ctx, opts) {
+    const n = {};
+    // --- sources ---
+    n.osc1 = ctx.createOscillator();
+    n.osc2 = ctx.createOscillator();
+    n.subOsc = ctx.createOscillator(); n.subOsc.type = 'square';
+    n.noiseSrc = ctx.createBufferSource(); n.noiseSrc.buffer = makeNoiseBuffer(ctx); n.noiseSrc.loop = true;
+
+    n.pan1 = ctx.createStereoPanner();
+    n.pan2 = ctx.createStereoPanner();
+    n.subGain = ctx.createGain();
+    n.noiseGain = ctx.createGain();
+    n.mixBus = ctx.createGain();
+    n.osc1.connect(n.pan1); n.pan1.connect(n.mixBus);
+    n.osc2.connect(n.pan2); n.pan2.connect(n.mixBus);
+    n.subOsc.connect(n.subGain); n.subGain.connect(n.mixBus);
+    n.noiseSrc.connect(n.noiseGain); n.noiseGain.connect(n.mixBus);
+
+    // --- drive + distortion + bitcrush ---
+    n.driveGain = ctx.createGain();
+    n.harsh = ctx.createWaveShaper(); n.harsh.oversample = 'none';
+    n.crush = ctx.createWaveShaper(); n.crush.oversample = 'none';
+    n.mixBus.connect(n.driveGain); n.driveGain.connect(n.harsh); n.harsh.connect(n.crush);
+
+    // --- ring modulation (wet / dry) ---
+    n.ringOsc = ctx.createOscillator();
+    n.ringDepth = ctx.createGain(); n.ringDepth.gain.value = 0;
+    n.ringMod = ctx.createGain(); n.ringMod.gain.value = 0;
+    n.ringDry = ctx.createGain();
+    n.ringSum = ctx.createGain();
+    n.ringOsc.connect(n.ringDepth); n.ringDepth.connect(n.ringMod.gain);
+    n.crush.connect(n.ringMod); n.ringMod.connect(n.ringSum);
+    n.crush.connect(n.ringDry); n.ringDry.connect(n.ringSum);
+
+    // --- resonant filter with wobble LFO ---
+    n.filter = ctx.createBiquadFilter(); n.filter.type = 'lowpass';
+    n.wobbleLFO = ctx.createOscillator();
+    n.wobbleDepth = ctx.createGain();
+    n.wobbleLFO.connect(n.wobbleDepth); n.wobbleDepth.connect(n.filter.frequency);
+    n.ringSum.connect(n.filter);
+
+    // --- AM tremolo ---
+    n.amGain = ctx.createGain();
+    n.amLFO = ctx.createOscillator();
+    n.amDepth = ctx.createGain();
+    n.amLFO.connect(n.amDepth); n.amDepth.connect(n.amGain.gain);
+    n.filter.connect(n.amGain);
+
+    // --- vibrato LFO to oscillator detune ---
+    n.vibLFO = ctx.createOscillator();
+    n.vibDepth = ctx.createGain();
+    n.vibLFO.connect(n.vibDepth);
+    n.vibDepth.connect(n.osc1.detune); n.vibDepth.connect(n.osc2.detune); n.vibDepth.connect(n.subOsc.detune);
+
+    // --- auto-pan ---
+    n.autopan = ctx.createStereoPanner();
+    n.autopanLFO = ctx.createOscillator();
+    n.autopanDepth = ctx.createGain();
+    n.autopanLFO.connect(n.autopanDepth); n.autopanDepth.connect(n.autopan.pan);
+    n.amGain.connect(n.autopan);
+
+    // --- space: dry + echo + reverb ---
+    n.dryMain = ctx.createGain(); n.dryMain.gain.value = 1;
+    n.delay = ctx.createDelay(1.0);
+    n.delayFB = ctx.createGain();
+    n.delayWet = ctx.createGain();
+    n.convolver = ctx.createConvolver(); n.convolver.buffer = makeImpulse(ctx);
+    n.reverbWet = ctx.createGain();
+    n.autopan.connect(n.dryMain);
+    n.autopan.connect(n.delay); n.delay.connect(n.delayFB); n.delayFB.connect(n.delay); n.delay.connect(n.delayWet);
+    n.autopan.connect(n.convolver); n.convolver.connect(n.reverbWet);
+
+    // --- limiter ---
+    n.limiter = ctx.createDynamicsCompressor();
+    n.limiter.threshold.value = -6; n.limiter.knee.value = 0; n.limiter.ratio.value = 20;
+    n.limiter.attack.value = 0.003; n.limiter.release.value = 0.1;
+    n.dryMain.connect(n.limiter); n.delayWet.connect(n.limiter); n.reverbWet.connect(n.limiter);
+
+    // --- envelope + volume ---
+    n.env = ctx.createGain(); n.env.gain.value = 0;
+    n.vol = ctx.createGain();
+    n.limiter.connect(n.env); n.env.connect(n.vol);
+
+    // --- output / analysers ---
+    if (opts.analyser) {
+        n.vol.connect(opts.analyser);
+        if (opts.splitter) n.vol.connect(opts.splitter);
+    } else {
+        n.vol.connect(opts.destination);
+    }
+
+    setParams(n, ctx, false);
+    const sources = [n.osc1, n.osc2, n.subOsc, n.noiseSrc, n.ringOsc, n.wobbleLFO, n.amLFO, n.vibLFO, n.autopanLFO];
+    return { nodes: n, sources, env: n.env };
+}
+
+function targetVol() { return (params.volume / 100) * 0.9; }
+
+function play() {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (playing) stop(true);
+    const t = audioCtx.currentTime;
+    const g = buildGraph(audioCtx, { analyser, splitter, destination: audioCtx.destination });
+    g.env.gain.cancelScheduledValues(t);
+    g.env.gain.setValueAtTime(0, t);
+    g.env.gain.linearRampToValueAtTime(1, t + 0.03);
+    g.sources.forEach(sn => { try { sn.start(t); } catch (e) {} });
+    live = g; playing = true;
+    updateUI();
+}
+
+function stop(immediate) {
+    if (!playing || !live) { playing = false; updateUI(); return; }
+    const t = audioCtx.currentTime, g = live;
+    if (immediate) {
+        g.sources.forEach(sn => { try { sn.stop(); } catch (e) {} });
+        try { g.env.gain.cancelScheduledValues(t); g.env.gain.setValueAtTime(0, t); } catch (e) {}
+        try { g.nodes.vol.disconnect(); } catch (e) {}
+    } else {
+        g.env.gain.cancelScheduledValues(t);
+        g.env.gain.setValueAtTime(g.env.gain.value, t);
+        g.env.gain.linearRampToValueAtTime(0, t + 0.06);
+        g.sources.forEach(sn => { try { sn.stop(t + 0.07); } catch (e) {} });
+        setTimeout(() => { try { g.nodes.vol.disconnect(); } catch (e) {} }, 200);
+    }
+    live = null; playing = false;
+    updateUI();
+}
+
+function applyLive() {
+    if (playing && live) setParams(live.nodes, audioCtx, true);
+}
+
+// ---- WAV export (stereo) ----
+function encodeWav(ab) {
+    const ch = ab.numberOfChannels, sr = ab.sampleRate, len = ab.length, blockAlign = ch * 2;
+    const data = [];
+    for (let c = 0; c < ch; c++) data.push(ab.getChannelData(c));
+    const buffer = new ArrayBuffer(44 + len * blockAlign), view = new DataView(buffer);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0, 'RIFF'); view.setUint32(4, 36 + len * blockAlign, true); ws(8, 'WAVE'); ws(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, ch, true);
+    view.setUint32(24, sr, true); view.setUint32(28, sr * blockAlign, true);
+    view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true);
+    ws(36, 'data'); view.setUint32(40, len * blockAlign, true);
+    let off = 44;
+    for (let i = 0; i < len; i++) {
+        for (let c = 0; c < ch; c++) {
+            let s = Math.max(-1, Math.min(1, data[c][i]));
+            view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true); off += 2;
+        }
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+async function exportWav(seconds) {
+    seconds = Math.max(0.1, Math.min(300, seconds || 5));
+    const sr = 44100;
+    const octx = new OfflineAudioContext(2, Math.ceil(sr * seconds), sr);
+    const g = buildGraph(octx, { destination: octx.destination });
+    g.env.gain.setValueAtTime(0, 0);
+    g.env.gain.linearRampToValueAtTime(1, 0.02);
+    g.env.gain.setValueAtTime(1, Math.max(0.02, seconds - 0.03));
+    g.env.gain.linearRampToValueAtTime(0, seconds);
+    g.sources.forEach(sn => { sn.start(0); sn.stop(seconds); });
+    const rendered = await octx.startRendering();
+    const blob = encodeWav(rendered);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'harsh_tone_' + seconds + 's.wav';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ============================================================
+//  UI  (generated from SPEC so slider + value IDs always match)
+// ============================================================
+const el = (id) => document.getElementById(id);
+
+function renderControls() {
+    let html = '';
+    SPEC.forEach(c => {
+        if (c.t === 'sec') { html += '<div class="sec">' + c.label + '</div>'; return; }
+        if (c.t === 'select') {
+            html += '<label class="ctrl">' + c.label + '<select id="' + c.id + '">' +
+                c.opts.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('') +
+                '</select></label>';
+            return;
+        }
+        html += '<label class="ctrl">' + c.label + ' <span class="val" id="' + c.id + 'Val"></span>' +
+            '<input type="range" id="' + c.id + '" min="' + c.min + '" max="' + c.max + '" step="' + c.step + '"></label>';
+    });
+    el('controls').innerHTML = html;
+}
+
+function bindControls() {
+    SPEC.forEach(c => {
+        if (c.t === 'sec') return;
+        const input = el(c.id);
+        if (!input) { console.warn('control not found:', c.id); return; }
+        if (c.t === 'select') {
+            input.value = params[c.id];
+            input.addEventListener('change', () => { params[c.id] = input.value; applyLive(); });
+            return;
+        }
+        const out = el(c.id + 'Val');
+        input.value = params[c.id];
+        const render = () => { if (out) out.textContent = (+params[c.id]).toFixed(c.dec) + ' ' + c.unit; };
+        input.addEventListener('input', () => { params[c.id] = parseFloat(input.value); render(); applyLive(); });
+        render();
+    });
+}
+
+function updateUI() {
+    el('hdr').classList.toggle('live', playing);
+    el('playBtn').textContent = playing ? 'playing' : 'play';
+}
+
+renderControls();
+bindControls();
+el('playBtn').addEventListener('click', play);
+el('stopBtn').addEventListener('click', () => stop(false));
+el('exportBtn').addEventListener('click', async () => {
+    const btn = el('exportBtn');
+    btn.disabled = true; btn.textContent = 'rendering...';
+    try { await exportWav(parseFloat(el('seconds').value)); }
+    catch (err) { console.error(err); }
+    btn.disabled = false; btn.textContent = 'export .wav';
+});
+el('hideBtn').addEventListener('click', () => {
+    const collapsed = el('panel').classList.toggle('collapsed');
+    el('hideBtn').textContent = collapsed ? 'show' : 'hide';
+});
+
+// ============================================================
+//  BACKGROUND: reactive solids, stars, spectrum ring, bass torus
+// ============================================================
+try {
+if (typeof THREE === 'undefined') throw new Error('three.js did not load (network blocked?)');
+
+class PlatonicSolid {
+    constructor(scene, geometry, colorOffset, axis, speed) {
+        this.axis = axis.normalize();
+        this.speed = speed;
+        this.colorOffset = colorOffset;
+        this.material = new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.1 });
+        this.mesh = new THREE.Mesh(geometry, this.material);
+        this.mesh.scale.set(8, 8, 8);
+        scene.add(this.mesh);
+        this.trailMeshes = []; this.trailMats = [];
+        for (let i = 0; i < 30; i++) {
+            const m = new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: (30 - i) * 0.01 });
+            const tm = new THREE.Mesh(geometry, m);
+            tm.scale.set(8, 8, 8);
+            scene.add(tm);
+            this.trailMeshes.push(tm); this.trailMats.push(m);
+        }
+    }
+    update(t, level) {
+        const spd = this.speed * (1 + level * 3.5);
+        this.mesh.rotateOnAxis(this.axis, spd);
+        const s = 8 * (1 + level * 0.45);
+        this.mesh.scale.set(s, s, s);
+        const freqHue = params.freq / 12000;
+        const hue = ((Math.sin(t * 0.2 + this.colorOffset) + 1) / 2 + freqHue) % 1;
+        const light = Math.min(0.85, 0.55 + level * 0.35);
+        this.material.color.setHSL(hue, 1, light);
+        this.material.opacity = Math.min(0.9, 0.1 + level * 1.8);
+        for (let i = 0; i < this.trailMeshes.length; i++) {
+            const trail = this.trailMeshes[i];
+            trail.quaternion.copy(this.mesh.quaternion);
+            trail.rotateOnAxis(this.axis, -spd * (i + 1) * 1.5);
+            trail.scale.set(s, s, s);
+            const th = ((Math.sin(t * 0.2 + this.colorOffset + i * 0.03) + 1) / 2 + freqHue) % 1;
+            this.trailMats[i].color.setHSL(th, 1, light);
+        }
+    }
+}
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+const renderer = new THREE.WebGLRenderer({ canvas: el('scene'), antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+camera.position.z = 16;
+
+const solids = [
+    new PlatonicSolid(scene, new THREE.TetrahedronGeometry(), 0, new THREE.Vector3(1, 0.3, 0.1), 0.0016),
+    new PlatonicSolid(scene, new THREE.OctahedronGeometry(), 2, new THREE.Vector3(0.2, 1, 0.4), 0.0011),
+    new PlatonicSolid(scene, new THREE.DodecahedronGeometry(), 4, new THREE.Vector3(0.1, 0.4, 1), 0.0021)
+];
+
+// starfield
+const starCount = 1600, starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+    const r = 70 + Math.random() * 400, theta = Math.random() * Math.PI * 2, phi = Math.acos(2 * Math.random() - 1);
+    starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    starPos[i * 3 + 2] = r * Math.cos(phi);
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2.4, transparent: true, opacity: 0.8, sizeAttenuation: true });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// radial spectrum ring
+const RING_R = 13;
+const ringGroup = new THREE.Group(); scene.add(ringGroup);
+const barGeo = new THREE.BoxGeometry(0.18, 1, 0.18);
+const bars = [];
+for (let i = 0; i < 64; i++) {
+    const a = (i / 64) * Math.PI * 2;
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+    const bar = new THREE.Mesh(barGeo, mat);
+    bar.rotation.z = a - Math.PI / 2;
+    bar._a = a; bar._mat = mat;
+    ringGroup.add(bar); bars.push(bar);
+}
+
+// bass-reactive torus
+const torusMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12 });
+const torus = new THREE.Mesh(new THREE.TorusGeometry(11, 0.25, 10, 80), torusMat);
+torus.rotation.x = Math.PI / 2.2;
+scene.add(torus);
+
+function readLevels() {
+    let overall = 0, bass = 0, bal = 0;
+    if (analyser && playing) {
+        analyser.getByteTimeDomainData(timeData);
+        let s = 0;
+        for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; s += v * v; }
+        overall = Math.sqrt(s / timeData.length);
+        analyser.getByteFrequencyData(freqData);
+        let b = 0; for (let i = 0; i < 12; i++) b += freqData[i]; bass = (b / 12) / 255;
+        analyserL.getByteTimeDomainData(timeL); analyserR.getByteTimeDomainData(timeR);
+        let sl = 0, sr = 0;
+        for (let i = 0; i < timeL.length; i++) { const a = (timeL[i] - 128) / 128; sl += a * a; }
+        for (let i = 0; i < timeR.length; i++) { const a = (timeR[i] - 128) / 128; sr += a * a; }
+        bal = Math.sqrt(sr / timeR.length) - Math.sqrt(sl / timeL.length);
+    }
+    return { overall, bass, bal };
+}
+
+let sLevel = 0, sBass = 0, sBal = 0;
+function animate(time) {
+    requestAnimationFrame(animate);
+    const t = time * 0.001;
+    const L = readLevels();
+    sLevel += (Math.min(1, L.overall * 2.2) - sLevel) * 0.15;
+    sBass += (L.bass - sBass) * 0.2;
+    sBal += (L.bal - sBal) * 0.1;
+
+    solids.forEach(s => s.update(t, sLevel));
+
+    for (let i = 0; i < bars.length; i++) {
+        const bin = Math.floor((i / bars.length) * 220);
+        const mag = playing ? freqData[bin] / 255 : 0;
+        const h = 0.4 + mag * 10;
+        const bar = bars[i];
+        bar.scale.y = h;
+        bar.position.set(Math.cos(bar._a) * (RING_R + h * 0.5), Math.sin(bar._a) * (RING_R + h * 0.5), 0);
+        bar._mat.color.setHSL((t * 0.1 + i / bars.length) % 1, 1, 0.55 + mag * 0.3);
+        bar._mat.opacity = 0.45 + mag * 0.55;
+    }
+    ringGroup.rotation.z = t * 0.05 + sBal * 0.5;
+
+    const bscale = 1 + sBass * 0.7 + sLevel * 0.1;
+    torus.scale.set(bscale, bscale, bscale);
+    torusMat.opacity = 0.12 + sBass * 0.6;
+    torusMat.color.setHSL((t * 0.06) % 1, 1, 0.6);
+
+    stars.rotation.y = t * 0.01; stars.rotation.x = t * 0.004;
+    starMat.opacity = 0.5 + 0.2 * Math.sin(t * 1.5) + sLevel * 0.5;
+    starMat.size = 2.4 + sLevel * 4;
+
+    camera.position.x = sBal * 4;
+    camera.position.z = 16 - sLevel * 2.5;
+    camera.lookAt(0, 0, 0);
+
+    renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+} catch (e) {
+    console.error('background animation failed to start:', e);
+}
+</script>
+</body>
+</html>
